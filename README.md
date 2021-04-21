@@ -3,7 +3,7 @@
 [DeepLabV3+](https://arxiv.org/pdf/1802.02611.pdf) implementation for Semantic Segmentation using PyTorch
 
 #### Train
-* Run `python train.py` for training
+* Run `python main.py` for training
 
 #### Dataset structure (similar to CamVid dataset)
     ├── Dataset folder 
