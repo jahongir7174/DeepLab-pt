@@ -68,8 +68,11 @@ class Residual(torch.nn.Module):
         super().__init__()
         identity = torch.nn.Identity()
         if fused:
-            features = [Conv(in_ch, r * in_ch, torch.nn.SiLU(True), 3, s),
-                        Conv(r * in_ch, out_ch, identity)]
+            if r == 1:
+                features = [Conv(in_ch, r * in_ch, torch.nn.SiLU(), 3, s)]
+            else:
+                features = [Conv(in_ch, r * in_ch, torch.nn.SiLU(), 3, s),
+                            Conv(r * in_ch, out_ch, identity)]
         else:
             features = [Conv(in_ch, r * in_ch, torch.nn.SiLU(True)),
                         Conv(r * in_ch, r * in_ch, torch.nn.SiLU(True), 3, s, r * in_ch),
@@ -85,18 +88,10 @@ class Residual(torch.nn.Module):
 class EfficientNet(torch.nn.Module):
     def __init__(self, filters) -> None:
         super().__init__()
-        feature = [Conv(3, filters[0], torch.nn.SiLU(True), 3, 2),
-                   Residual(filters[0], filters[0], 1, 1),
-                   Residual(filters[0], filters[0], 1, 1)]
+        feature = [Conv(filters[0], filters[1], torch.nn.SiLU(True), 3, 2),
+                   Residual(filters[1], filters[1], 1, 1),
+                   Residual(filters[1], filters[1], 1, 1)]
         self.res1 = torch.nn.Sequential(*feature)
-
-        feature = []
-        for i in range(4):
-            if i == 0:
-                feature.append(Residual(filters[0], filters[1], 2, 4))
-            else:
-                feature.append(Residual(filters[1], filters[1], 1, 4))
-        self.res2 = torch.nn.Sequential(*feature)
 
         feature = []
         for i in range(4):
@@ -104,19 +99,27 @@ class EfficientNet(torch.nn.Module):
                 feature.append(Residual(filters[1], filters[2], 2, 4))
             else:
                 feature.append(Residual(filters[2], filters[2], 1, 4))
+        self.res2 = torch.nn.Sequential(*feature)
+
+        feature = []
+        for i in range(4):
+            if i == 0:
+                feature.append(Residual(filters[2], filters[3], 2, 4))
+            else:
+                feature.append(Residual(filters[3], filters[3], 1, 4))
         self.res3 = torch.nn.Sequential(*feature)
 
         feature = []
         for i in range(6):
             if i == 0:
-                feature.append(Residual(filters[2], filters[3], 2, 4, False))
+                feature.append(Residual(filters[3], filters[4], 2, 4, False))
             else:
-                feature.append(Residual(filters[3], filters[3], 1, 4, False))
+                feature.append(Residual(filters[4], filters[4], 1, 4, False))
         for i in range(9):
             if i == 0:
-                feature.append(Residual(filters[3], filters[4], 1, 6, False))
+                feature.append(Residual(filters[4], filters[5], 1, 6, False))
             else:
-                feature.append(Residual(filters[4], filters[4], 1, 6, False))
+                feature.append(Residual(filters[5], filters[5], 1, 6, False))
         self.res4 = torch.nn.Sequential(*feature)
 
         initialize_weights(self)
@@ -183,16 +186,16 @@ class ASPPModule(torch.nn.Module):
 class DeepLabV3(torch.nn.Module):
     def __init__(self, num_class):
         super().__init__()
-        filters = [24, 48, 64, 128, 160, 272, 1792]
-        num_channels = filters[1] + filters[4]
+        filters = [3, 24, 48, 64, 128, 160]
+        num_channels = filters[2] + filters[5]
         self.feature = EfficientNet(filters)
-        self.spp_mod = ASPPModule(filters[4], [6, 12, 18], filters[4])
+        self.spp_mod = ASPPModule(filters[5], [6, 12, 18], filters[5])
         self.head_fn = torch.nn.Sequential(torch.nn.Conv2d(num_channels, 256, 3, padding=1, bias=False),
                                            torch.nn.BatchNorm2d(256),
                                            torch.nn.ReLU(inplace=True),
                                            torch.nn.Conv2d(256, num_class, 1))
-        self.project = torch.nn.Sequential(torch.nn.Conv2d(filters[1], filters[1], 1, bias=False),
-                                           torch.nn.BatchNorm2d(filters[1]),
+        self.project = torch.nn.Sequential(torch.nn.Conv2d(filters[2], filters[2], 1, bias=False),
+                                           torch.nn.BatchNorm2d(filters[2]),
                                            torch.nn.ReLU(inplace=True))
 
     def forward(self, x):
